@@ -42,6 +42,6 @@ cmake-build-debug
 
 !binary/
 
-oglplus
+
 build-release
 .ipynb_checkpoints
