@@ -96,32 +96,37 @@ std::vector<std::complex<double>> calcIntegralAll(const std::vector<Entry>& tabl
 std::vector<Dipole> estimate(const std::vector<Entry>& data, int pow_max)
 {
     // データとパラメタP(=pow)が与えられたときに双極子推定を行う。
-    auto c = calcIntegralAll(data, pow_max);
-    int n = c.size() / 2;
+    auto c = calcIntegralAll(data, pow_max);  // 複素積分を全て実行する。
+    int n = c.size() / 2;                     // ハンケル行列のサイズを求める。
+
+    // ハンケル行列を作る。
     Eigen::MatrixXcd matrix(n, n);
     for (int y = 0; y < n; y++) {
         for (int x = 0; x < n; x++) {
             matrix(y, x) = c[x + y];
         }
     }
+
+    // ハンケル行列C_0を特異値分解する。
     auto svd = matrix.jacobiSvd(Eigen::ComputeThinU | Eigen::ComputeThinV);
 
-    svd.setThreshold(std::exp(ln10 * log_threshold));
-    int r = svd.rank();
+    svd.setThreshold(std::exp(ln10 * log_threshold));  // 閾値Tを設定
+    int r = svd.rank();                                // ハンケル行列のランクを求める。
 
+    // 右辺のハンケル行列C_1を作る。
     Eigen::MatrixXcd matrix2(n, n);
     for (int y = 0; y < n; y++) {
         for (int x = 0; x < n; x++) {
             matrix2(y, x) = c[x + y + 1];
         }
     }
+    // 疑似逆行列によって行列Fを計算する
     Eigen::MatrixXcd transition = svd.solve(matrix2);
-    //    std::cout << matrix << std::endl;
-    //    std::cout << matrix2 << std::endl;
-    //    std::cout << transition << std::endl;
+
+    // 行列Fの固有値を求める。
     Eigen::Matrix<std::complex<double>, Eigen::Dynamic, 1> eig = transition.eigenvalues();
 
-
+    // 行列Fの固有値を絶対値が大きい順にソートし、初めからr個のうちで絶対値が1より大きくないものを採用する。
     std::sort(eig.data(), eig.data() + n, [](const std::complex<double>& a, const std::complex<double>& b) { return std::abs(a) > std::abs(b); });
     for (int i = 0; i < r; i++) {
         if (std::abs(eig(i)) > 1.0) {
@@ -129,10 +134,13 @@ std::vector<Dipole> estimate(const std::vector<Entry>& data, int pow_max)
         }
     }
 
+    // もし双極子が存在しないと推定されたら、後続の処理がエラーとなるためこの時点で関数から抜ける。
     if (r == 0) {
         return {};
     }
 
+    // m_iの推定
+    // 左辺の大きな行列(example)と右辺のデータベクトル(data_vector)を作る
     Eigen::MatrixXd example(data.size(), r * 2);
     Eigen::VectorXd data_vector(data.size());
     for (int i = 0; i < data.size(); i++) {
@@ -148,8 +156,10 @@ std::vector<Dipole> estimate(const std::vector<Entry>& data, int pow_max)
         data_vector(i) = data[i].p.imag();
     }
 
+    // 最小二乗法によりm_iを推定する。
     Eigen::VectorXd sol = example.fullPivHouseholderQr().solve(data_vector);
 
+    // 出力形式を揃える。
     std::vector<Dipole> ret(r);
     for (int i = 0; i < r; i++) {
         ret[i].m = {sol(2 * i), sol(2 * i + 1)};
