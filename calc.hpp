@@ -9,7 +9,7 @@
 #include <vector>
 
 using namespace std::complex_literals;
-struct Dipole {
+struct Dipole {  //双極子を表す
     std::complex<double> z;
     std::complex<double> m;
     Dipole conjugate() const
@@ -18,19 +18,20 @@ struct Dipole {
     }
 };
 constexpr double PI = 3.1415926535897932384626;
-//double threshold = 1e-1;
-double log_threshold = -2;
+double log_threshold = -2;  // 閾値Tの常用対数
 
 constexpr double ln10 = std::log(10.0);
 
 std::complex<double> calcPotential(const Dipole& d, const std::complex<double> z)
 {
+    //一つの双極子dが与えられたとき、それがzの位置に作る複素ポテンシャルを計算する。
     if (d.m == 0.0)
         return 0.0;
     return (1.0 / (2 * PI)) * d.m / (z - d.z);
 }
 std::complex<double> calcPotential(const std::vector<Dipole>& dipoles, const std::complex<double> z)
 {
+    //複数の双極子が与えられたとき、それがzの位置に作る複素ポテンシャルを計算する。
     std::complex<double> ret = 0;
     for (auto& d : dipoles) {
         ret += calcPotential(d, z);
@@ -40,6 +41,7 @@ std::complex<double> calcPotential(const std::vector<Dipole>& dipoles, const std
 
 std::complex<double> calcField(const std::vector<Dipole>& dipoles, const std::complex<double> z)
 {
+    //複数の双極子が与えられたとき、それがzの位置に作る磁場を計算する。
     std::complex<double> ret = 0;
     for (auto& d : dipoles) {
         if (d.m == 0.0)
@@ -51,14 +53,15 @@ std::complex<double> calcField(const std::vector<Dipole>& dipoles, const std::co
     return ret;
 }
 
-struct Entry {
-    std::complex<double> z;
-    std::complex<double> p;
-    std::complex<double> dz;
+struct Entry {                // 推定関数の入力となる測定データ。
+    std::complex<double> z;   // 測定位置
+    std::complex<double> p;   // 複素ポテンシャル
+    std::complex<double> dz;  // 測定位置の間隔。周回積分で用いる
 };
 
 std::vector<Entry> potentialTable(const std::vector<Dipole>& dipoles, int div)
 {
+    // 円周上に測定器を配置したときの測定データをシミュレーションする。
     std::vector<Entry> ret(div);
     double tick = PI * 2 / div;
     for (int i = 0; i < div; i++) {
@@ -73,6 +76,7 @@ std::vector<Entry> potentialTable(const std::vector<Dipole>& dipoles, int div)
 
 std::complex<double> calcIntegral(const std::vector<Entry>& table, int pow)
 {
+    // zのpow乗をかけて複素積分することを数値的に実行する。
     std::complex<double> sum = 0;
     for (auto [z, p, dz] : table) {
         sum += dz * p * std::pow(z, pow);
@@ -81,6 +85,7 @@ std::complex<double> calcIntegral(const std::vector<Entry>& table, int pow)
 }
 std::vector<std::complex<double>> calcIntegralAll(const std::vector<Entry>& table, int pow_max)
 {
+    // zのk乗をかけて複素積分するということをk=0..powまで一括で実行する。
     std::vector<std::complex<double>> ret(pow_max + 1);
     for (int i = 0; i <= pow_max; i++) {
         ret[i] = calcIntegral(table, i);
@@ -90,6 +95,7 @@ std::vector<std::complex<double>> calcIntegralAll(const std::vector<Entry>& tabl
 
 std::vector<Dipole> estimate(const std::vector<Entry>& data, int pow_max)
 {
+    // データとパラメタP(=pow)が与えられたときに双極子推定を行う。
     auto c = calcIntegralAll(data, pow_max);
     int n = c.size() / 2;
     Eigen::MatrixXcd matrix(n, n);
@@ -143,28 +149,7 @@ std::vector<Dipole> estimate(const std::vector<Entry>& data, int pow_max)
     }
 
     Eigen::VectorXd sol = example.fullPivHouseholderQr().solve(data_vector);
-    //    Eigen::MatrixXcd vandermonde(c.size(), r);
-    //    for (int i = 0; i < r; i++) {
-    //        std::complex<double> z = eig(i);
-    //        std::complex<double> s = 1;
-    //        for (int j = 0; j < c.size(); j++) {
-    //            vandermonde(j, i) = s;
-    //            s *= z;
-    //        }
-    //    }
-    //    std::cout << vandermonde << std::endl;
 
-    /*
-    Eigen::Matrix<std::complex<double>, Eigen::Dynamic, 1>
-        vec(c.size());
-    for (int i = 0; i < n; i++) {
-        vec[i] = c[i];
-    }
-
-    Eigen::Matrix<std::complex<double>, Eigen::Dynamic, 1> m = vandermonde.jacobiSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(vec);
-*/
-
-    //    std::cout << vec << std::endl;
     std::vector<Dipole> ret(r);
     for (int i = 0; i < r; i++) {
         ret[i].m = {sol(2 * i), sol(2 * i + 1)};
