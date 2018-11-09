@@ -93,7 +93,8 @@ std::vector<std::complex<double>> calcIntegralAll(const std::vector<Entry>& tabl
     return ret;
 }
 
-std::vector<Dipole> estimate(const std::vector<Entry>& data, int pow_max)
+std::vector<Dipole> estimate(const std::vector<Entry>& data,
+    int pow_max)
 {
     // データとパラメタP(=pow)が与えられたときに双極子推定を行う。
     auto c = calcIntegralAll(data, pow_max);  // 複素積分を全て実行する。
@@ -124,17 +125,22 @@ std::vector<Dipole> estimate(const std::vector<Entry>& data, int pow_max)
     Eigen::MatrixXcd transition = svd.solve(matrix2);
 
     // 行列Fの固有値を求める。
-    Eigen::Matrix<std::complex<double>, Eigen::Dynamic, 1> eig = transition.eigenvalues();
+    Eigen::VectorXcd eig = transition.eigenvalues();
 
-    // 行列Fの固有値を絶対値が大きい順にソートし、初めからr個のうちで絶対値が1より大きくないものを採用する。
-    std::sort(eig.data(), eig.data() + n, [](const std::complex<double>& a, const std::complex<double>& b) { return std::abs(a) > std::abs(b); });
+    // 行列Fの固有値を絶対値が大きい順にソートし、
+    // 初めからr個のうちで絶対値が1より大きくないものを採用する。
+    std::sort(eig.data(), eig.data() + n,
+        [](const auto& a, const auto& b) {
+            return std::abs(a) > std::abs(b);
+        });
     for (int i = 0; i < r; i++) {
         if (std::abs(eig(i)) > 1.0) {
             std::swap(eig(i), eig(--r));
         }
     }
 
-    // もし双極子が存在しないと推定されたら、後続の処理がエラーとなるためこの時点で関数から抜ける。
+    // もし双極子が存在しないと推定されたら、後続の処理がエラーとなるため
+    // この時点で関数から抜ける。
     if (r == 0) {
         return {};
     }
@@ -148,7 +154,8 @@ std::vector<Dipole> estimate(const std::vector<Entry>& data, int pow_max)
             auto try_p = [&](const std::complex<double>& m) {
                 Dipole d11 = {eig[j], m};
                 Dipole d12 = d11.conjugate();
-                return calcPotential(d11, data[i].z).imag() + calcPotential(d12, data[i].z).imag();
+                return calcPotential(d11, data[i].z).imag()
+                       + calcPotential(d12, data[i].z).imag();
             };
             example(i, j * 2) = try_p(1.0);
             example(i, j * 2 + 1) = try_p(1.0i);
